@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .pdf-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .pdf-list li {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .pdf-list a {
+            color: #333;
+            text-decoration: none;
+            display: block;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .pdf-list a:hover {
+            background-color: #f0f0f0;
+            color: #007bff;
+        }
+        .folder {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .folder-header {
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            background-color: #e9ecef;
+            border-radius: 5px 5px 0 0;
+        }
+        .folder-header:hover {
+            background-color: #dee2e6;
+        }
+        .folder-content {
+            padding: 10px;
+            display: none;
+        }
+        .folder-content.expanded {
+            display: block;
+        }
+        .folder-icon {
+            margin-right: 10px;
+            transition: transform 0.2s;
+        }
+        .folder-icon.expanded {
+            transform: rotate(90deg);
+        }
+        .file-icon {
+            margin-right: 10px;
+            color: #dc3545;
+        }
+        .nested-folder {
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Доступные PDF файлы</h1>
+    <div id="total-files" style="margin-bottom: 20px; color: #666;"></div>
+    <div id="file-tree"></div>
+
+    <script>
+        const BASE_URL = 'https://mapcheb.ru/library';
+        
+        function toggleFolder(element) {
+            const content = element.nextElementSibling;
+            const icon = element.querySelector('.folder-icon');
+            content.classList.toggle('expanded');
+            icon.classList.toggle('expanded');
+        }
+
+        function createFileLink(file, path) {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = `${BASE_URL}/view/${path}/${file}`;
+            
+            const fileIcon = document.createElement('span');
+            fileIcon.className = 'file-icon';
+            fileIcon.textContent = '📄';
+            
+            a.appendChild(fileIcon);
+            a.appendChild(document.createTextNode(file));
+            li.appendChild(a);
+            return li;
+        }
+
+        function renderFolder(folderPath, items) {
+            const container = document.createElement('div');
+            
+            // Рендерим подпапки
+            if (items.folders) {
+                Object.entries(items.folders).forEach(([subfolder, subitems]) => {
+                    const folderDiv = document.createElement('div');
+                    folderDiv.className = 'folder nested-folder';
+                    
+                    const header = document.createElement('div');
+                    header.className = 'folder-header';
+                    header.onclick = () => toggleFolder(header);
+                    
+                    const icon = document.createElement('span');
+                    icon.className = 'folder-icon';
+                    icon.textContent = '▶';
+                    
+                    const name = document.createElement('strong');
+                    name.textContent = subfolder;
+                    
+                    const count = document.createElement('span');
+                    count.style.color = '#666';
+                    count.style.marginLeft = '10px';
+                    count.textContent = `(${subitems.total_files} файлов)`;
+                    
+                    header.appendChild(icon);
+                    header.appendChild(name);
+                    header.appendChild(count);
+                    
+                    const content = document.createElement('div');
+                    content.className = 'folder-content';
+                    
+                    if (subitems.files && subitems.files.length > 0) {
+                        const ul = document.createElement('ul');
+                        ul.className = 'pdf-list';
+                        subitems.files.forEach(file => {
+                            ul.appendChild(createFileLink(file, folderPath ? `${folderPath}/${subfolder}` : subfolder));
+                        });
+                        content.appendChild(ul);
+                    }
+                    
+                    content.appendChild(renderFolder(folderPath ? `${folderPath}/${subfolder}` : subfolder, subitems));
+                    
+                    folderDiv.appendChild(header);
+                    folderDiv.appendChild(content);
+                    container.appendChild(folderDiv);
+                });
+            }
+            
+            // Рендерим файлы в корневой папке
+            if (items.files && !folderPath) {
+                const ul = document.createElement('ul');
+                ul.className = 'pdf-list';
+                items.files.forEach(file => {
+                    ul.appendChild(createFileLink(file, ''));
+                });
+                container.appendChild(ul);
+            }
+            
+            return container;
+        }
+
+        // Загружаем и отображаем данные
+        fetch('/library/api/files')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('total-files').textContent = `Всего файлов: ${data.total_files}`;
+                document.getElementById('file-tree').appendChild(renderFolder('', data));
+            })
+            .catch(error => console.error('Ошибка загрузки данных:', error));
+    </script>
+</body>
+</html>

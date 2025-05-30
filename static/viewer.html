@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer - {{ filename }}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #toolbar {
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #toolbar button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        #pdf-container {
+            width: 100%;
+            height: calc(100vh - 100px);
+            overflow: auto;
+            border: 1px solid #ccc;
+        }
+        #pdf-viewer {
+            width: 100%;
+        }
+        .page {
+            margin: 0 auto 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .page canvas {
+            display: block;
+        }
+        .page .textLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            opacity: 0.2;
+            line-height: 1.0;
+            --scale-factor: 1;
+        }
+        .page .textLayer > span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+        .page .textLayer .highlight {
+            margin: -1px;
+            padding: 1px;
+            background-color: rgb(180, 0, 170);
+            border-radius: 4px;
+        }
+        .page .textLayer .highlight.selected {
+            background-color: rgb(0, 100, 0);
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button onclick="window.location.href='{{ base_url }}/'">← Назад к списку</button>
+        <button onclick="prevPage()">← Предыдущая</button>
+        <button onclick="nextPage()">Следующая →</button>
+        <button onclick="zoomIn()">+</button>
+        <button onclick="zoomOut()">-</button>
+        <span id="page-info"></span>
+        <div style="display: inline-block; margin-left: 20px;">
+            <input type="number" id="page-input" min="1" style="width: 60px; padding: 5px;">
+            <button onclick="goToPage()">Перейти</button>
+        </div>
+        <button onclick="window.open('{{ original_url }}', '_blank')" style="margin-left: 20px;">Открыть PDF на сайте библиотеки</button>
+    </div>
+    <div id="pdf-container">
+        <div id="pdf-viewer"></div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        let currentScale = 1.0;
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+
+        function renderPage(num) {
+            pageRendering = true;
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({scale: currentScale});
+                
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'page';
+                pageDiv.style.width = viewport.width + 'px';
+                pageDiv.style.height = viewport.height + 'px';
+                
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                const textLayerDiv = document.createElement('div');
+                textLayerDiv.className = 'textLayer';
+                textLayerDiv.style.width = viewport.width + 'px';
+                textLayerDiv.style.height = viewport.height + 'px';
+                textLayerDiv.style.setProperty('--scale-factor', currentScale);
+                
+                pageDiv.appendChild(canvas);
+                pageDiv.appendChild(textLayerDiv);
+                document.getElementById('pdf-viewer').innerHTML = '';
+                document.getElementById('pdf-viewer').appendChild(pageDiv);
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+
+                const renderTask = page.render(renderContext);
+                
+                renderTask.promise.then(function() {
+                    return page.getTextContent();
+                }).then(function(textContent) {
+                    pdfjsLib.renderTextLayer({
+                        textContent: textContent,
+                        container: textLayerDiv,
+                        viewport: viewport,
+                        textDivs: []
+                    });
+                });
+
+                pageRendering = false;
+                if (pageNumPending !== null) {
+                    renderPage(pageNumPending);
+                    pageNumPending = null;
+                }
+            });
+
+            document.getElementById('page-info').textContent = `Страница ${num} из ${pdfDoc.numPages}`;
+            document.getElementById('page-input').value = num;
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function prevPage() {
+            if (pageNum <= 1) {
+                return;
+            }
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+
+        function nextPage() {
+            if (pageNum >= pdfDoc.numPages) {
+                return;
+            }
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+
+        function goToPage() {
+            const input = document.getElementById('page-input');
+            const page = parseInt(input.value);
+            
+            if (page && page >= 1 && page <= pdfDoc.numPages) {
+                pageNum = page;
+                queueRenderPage(pageNum);
+            } else {
+                alert(`Пожалуйста, введите номер страницы от 1 до ${pdfDoc.numPages}`);
+                input.value = pageNum;
+            }
+        }
+
+        function zoomIn() {
+            currentScale *= 1.2;
+            queueRenderPage(pageNum);
+        }
+
+        function zoomOut() {
+            currentScale /= 1.2;
+            queueRenderPage(pageNum);
+        }
+
+        // Загрузка PDF
+        pdfjsLib.getDocument("{{ full_url }}").promise.then(function(pdf) {
+            pdfDoc = pdf;
+            document.getElementById('page-input').max = pdf.numPages;
+            renderPage(pageNum);
+        });
+    </script>
+</body>
+</html> 
