@@ -76,6 +76,7 @@
         <button onclick="window.location.href='{{ base_url }}/'">← Назад к списку</button>
         <button onclick="prevPage()">← Предыдущая</button>
         <button onclick="nextPage()">Следующая →</button>
+        <button onclick="goToLastPage()">На последнюю страницу</button>
         <button onclick="zoomIn()">+</button>
         <button onclick="zoomOut()">-</button>
         <span id="page-info"></span>
@@ -190,6 +191,11 @@
             }
         }
 
+        function goToLastPage() {
+            pageNum = pdfDoc.numPages;
+            queueRenderPage(pageNum);
+        }
+
         function zoomIn() {
             currentScale *= 1.2;
             queueRenderPage(pageNum);
@@ -199,6 +205,15 @@
             currentScale /= 1.2;
             queueRenderPage(pageNum);
         }
+
+        // Обработчик клавиатурных событий
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                prevPage();
+            } else if (event.key === 'ArrowRight') {
+                nextPage();
+            }
+        });
 
         // Загрузка PDF
         pdfjsLib.getDocument("{{ full_url }}").promise.then(function(pdf) {
