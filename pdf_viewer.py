@@ -1,4 +1,5 @@
 import os
+import json
 from flask import Flask, send_from_directory, abort, jsonify, render_template_string
 import logging
 from functools import lru_cache
@@ -13,6 +14,9 @@ logging.getLogger('watchdog').setLevel(logging.WARNING)
 # Настраиваем логирование только для нашего приложения
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
+
+with open("links_.json", "r", encoding="utf-8") as f:
+    links = json.load(f)
 
 @lru_cache(maxsize=1)
 def get_pdf_files(directory):
@@ -93,6 +97,7 @@ def serve_pdf(filename):
 @app.route('/view/<path:filename>')
 def view_pdf(filename):
     """Страница для просмотра PDF с использованием PDF.js."""
+    global links
     with open('static/viewer.html', 'r', encoding='utf-8') as f:
         template = f.read()
     
@@ -108,7 +113,8 @@ def view_pdf(filename):
         base_url=base_url,
         filename=filename,
         full_url=f"{base_url}pdf/{filename}",
-        original_url=f"{original_url_base}{filename}"
+        original_url=f"{original_url_base}{filename}",
+        meta_data = links.get(filename, "")
     )
 
 if __name__ == '__main__':
