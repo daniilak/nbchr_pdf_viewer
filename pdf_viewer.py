@@ -52,9 +52,8 @@ def build_file_tree(pdf_files):
                 if parts[i] not in current['folders']:
                     current['folders'][parts[i]] = {'files': [], 'folders': {}, 'total_files': 0}
                 current = current['folders'][parts[i]]
-                current['total_files'] += 1
             current['files'].append(parts[-1])
-            current['total_files'] += 1
+            current['total_files'] += 1  # Увеличиваем счетчик только один раз при добавлении файла
         else:
             file_tree['files'].append(pdf_file)
             file_tree['total_files'] += 1
@@ -74,7 +73,11 @@ def get_files():
         logger.error("PDF_DIRECTORY не установлен в .env файле")
         abort(500)
     pdf_files = get_pdf_files(pdf_directory)
+    logger.info(f"DEBUG: Всего найдено файлов: {len(pdf_files)}")
+    
     file_tree = build_file_tree(pdf_files)
+    logger.info(f"DEBUG: Количество файлов в корне: {len(file_tree['files'])}")
+    logger.info(f"DEBUG: Количество папок в корне: {len(file_tree['folders'])}")
     
     response = jsonify(file_tree)
     response.headers['Cache-Control'] = 'public, max-age=3600'
